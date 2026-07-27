@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synapsis.dev/contracts/critic-v1.json",
+  "title": "Critic Agent Contract",
+  "description": "Code review agent that analyzes code for correctness, performance, security, and style. Participates in debate loops with Coder for iterative improvement.",
+  "type": "object",
+  "required": ["agent_id", "agent_type", "capabilities", "input_schema", "output_schema"],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "const": "critic-v1"
+    },
+    "agent_type": {
+      "type": "string",
+      "const": "critic"
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Tools the Critic can invoke",
+      "items": {
+        "type": "string",
+        "enum": [
+          "review_code",
+          "run_static_analysis",
+          "suggest_tests",
+          "compare_versions",
+          "security_scan",
+          "check_best_practices",
+          "evaluate_readability"
+        ]
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "required": ["task_type", "task_id", "code_blackboard_key"],
+      "properties": {
+        "task_type": {
+          "type": "string",
+          "enum": ["review", "analyze", "suggest_tests", "security_check", "debate", "compare"],
+          "description": "Type of review task requested"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task identifier from Orchestrator"
+        },
+        "code_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key where the code to review is stored"
+        },
+        "specification_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key where the original specification is stored. Used to check if code meets requirements."
+        },
+        "execution_result_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key where the Coder's execution results are stored. Used to check for runtime issues."
+        },
+        "previous_review_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key of a previous review. Used in debate mode to check if issues were addressed."
+        },
+        "coder_explanation_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key where the Coder's explanation is stored. Provides design rationale."
+        },
+        "review_focus": {
+          "type": "array",
+          "description": "Specific areas to focus the review on. If empty, review all aspects.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "correctness",
+              "performance",
+              "security",
+              "style",
+              "edge_cases",
+              "error_handling",
+              "dependencies",
+              "readability",
+              "testability",
+              "documentation"
+            ]
+          },
+          "default": ["correctness", "security", "edge_cases", "error_handling"]
+        },
+        "context_blackboard_keys": {
+          "type": "array",
+          "description": "Additional context for review, such as Librarian search results with coding standards from the vault",
+          "items": {
+            "type": "string"
+          }
+        },
+        "debate_round": {
+          "type": "integer",
+          "description": "Current debate round number. Used in debate mode to track progress.",
+          "minimum": 1
+        },
+        "max_debate_rounds": {
+          "type": "integer",
+          "default": 5,
+          "description": "Maximum debate rounds before forced resolution"
+        }
+      }
+    },
+    "output_schema": {
+      "type": "object",
+      "required": ["status", "task_id", "verdict"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "error"],
+          "description": "Whether the review completed successfully"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["approved", "approved_with_suggestions", "changes_requested", "rejected"],
+          "description": "approved: code is ready. approved_with_suggestions: code works, minor improvements possible. changes_requested: issues must be addressed. rejected: fundamental problems, needs rewrite."
+        },
+        "issues": {
+          "type": "array",
+          "description": "Issues found during review. Empty if verdict is 'approved'.",
+          "items": {
+            "type": "object",
+            "required": ["severity", "category", "description"],
+            "properties": {
+              "severity": {
+                "type": "string",
+                "enum": ["critical", "major", "minor", "suggestion"],
+                "description": "critical: security vulnerability or guaranteed crash. major: likely bug or significant performance issue. minor: style or readability. suggestion: optional improvement."
+              },
+              "category": {
+                "type": "string",
+                "enum": [
+                  "correctness",
+                  "performance",
+                  "security",
+                  "style",
+                  "edge_case",
+                  "error_handling",
+                  "dependency",
+                  "readability",
+                  "documentation"
+                ]
+              },
+              "line_range": {
+                "type": "string",
+                "description": "Approximate line range where the issue occurs, e.g., 'L12-L18' or 'function: calculate_metrics'"
+              },
+              "description": {
+                "type": "string",
+                "description": "Clear description of the issue"
+              },
+              "fix_suggestion": {
+                "type": "string",
+                "description": "Specific, actionable suggestion for how to fix the issue. Can include code snippets."
+              },
+              "id": {
+                "type": "string",
+                "description": "Unique issue identifier within this review. Used to track whether issues are resolved in subsequent debate rounds.",
+                "pattern": "^issue-[a-z0-9]+$"
+              }
+            }
+          }
+        },
+        "resolved_issues": {
+          "type": "array",
+          "description": "Issue IDs from previous reviews that have been resolved in this version",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unresolved_issues": {
+          "type": "array",
+          "description": "Issue IDs from previous reviews that are still not resolved",
+          "items": {
+            "type": "string"
+          }
+        },
+        "test_suggestions": {
+          "type": "array",
+          "description": "Suggested tests for the code",
+          "items": {
+            "type": "object",
+            "properties": {
+              "test_name": {
+                "type": "string"
+              },
+              "test_type": {
+                "type": "string",
+                "enum": ["unit", "integration", "edge_case", "performance", "regression"]
+              },
+              "description": {
+                "type": "string",
+                "description": "What the test should verify"
+              },
+              "code_skeleton": {
+                "type": "string",
+                "description": "Optional skeleton/test pseudocode"
+              }
+            }
+          }
+        },
+        "debate_stance": {
+          "type": "string",
+          "description": "Present in debate mode. The Critic's current position on the code, useful for breaking deadlocks.",
+          "enum": [
+            "needs_major_changes",
+            "needs_minor_changes",
+            "almost_there",
+            "acceptable",
+            "cannot_approve_current_approach"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "description": "Human-readable summary of the review, suitable for display to the user"
+        },
+        "blackboard_keys": {
+          "type": "array",
+          "description": "Blackboard keys where review results were written",
+          "items": {
+            "type": "string"
+          }
+        },
+        "execution_time_ms": {
+          "type": "number"
+        },
+        "error": {
+          "type": "object",
+          "description": "Present only if status is 'error'",
+          "properties": {
+            "error_type": {
+              "type": "string",
+              "enum": ["code_not_found_on_blackboard", "spec_not_found", "llm_review_failed"]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "peer_agents": {
+      "type": "array",
+      "description": "Critic can participate in debate with Coder. This is spawned and supervised by the Orchestrator.",
+      "items": {
+        "type": "string"
+      },
+      "default": ["coder-v1"]
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "default": 90,
+      "description": "Maximum time for a code review"
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "default": 2
+        },
+        "backoff_strategy": {
+          "type": "string",
+          "enum": ["linear"],
+          "default": "linear"
+        }
+      }
+    },
+    "debate_rules": {
+      "type": "object",
+      "description": "Rules governing Coder↔Critic debate behavior",
+      "properties": {
+        "max_rounds": {
+          "type": "integer",
+          "default": 5,
+          "description": "Maximum number of debate rounds before Orchestrator forces resolution"
+        },
+        "escalation_trigger": {
+          "type": "string",
+          "enum": ["unresolved_critical", "three_consecutive_no_progress", "deadlock"],
+          "description": "Condition that causes the debate to escalate to the Orchestrator for user intervention"
+        },
+        "debate_timeout_seconds": {
+          "type": "integer",
+          "default": 300,
+          "description": "Maximum total time for the entire debate loop"
+        }
+      }
+    }
+  }
+}

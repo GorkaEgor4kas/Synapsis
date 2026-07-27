@@ -1,0 +1,302 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synapsis.dev/contracts/librarian-v1.json",
+  "title": "Librarian Agent Contract",
+  "description": "Knowledge retrieval agent that searches an Obsidian vault via Memex RAG. Wraps Memex hybrid search, semantic search, and note retrieval as tools.",
+  "type": "object",
+  "required": ["agent_id", "agent_type", "capabilities", "input_schema", "output_schema"],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "const": "librarian-v1"
+    },
+    "agent_type": {
+      "type": "string",
+      "const": "librarian"
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Tools the Librarian can invoke. All backed by Memex RAG.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "memex_hybrid_search",
+          "memex_semantic_search",
+          "memex_bm25_search",
+          "get_note_content",
+          "get_note_metadata",
+          "list_linked_notes",
+          "list_backlinks",
+          "get_vault_stats",
+          "search_by_tag",
+          "search_by_folder"
+        ]
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "required": ["task_type", "query", "task_id"],
+      "properties": {
+        "task_type": {
+          "type": "string",
+          "enum": ["search", "retrieve", "explore_links", "explore_backlinks", "compare_notes", "vault_overview"],
+          "description": "Type of knowledge operation requested"
+        },
+        "query": {
+          "type": "string",
+          "description": "Natural language search query, note title, or note path",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task identifier from Orchestrator. Used for Blackboard key namespacing."
+        },
+        "num_results": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Maximum number of results to return"
+        },
+        "search_mode": {
+          "type": "string",
+          "enum": ["hybrid", "semantic", "bm25"],
+          "default": "hybrid",
+          "description": "Which Memex search mode to use. Hybrid combines BM25 + semantic with RRF fusion."
+        },
+        "filters": {
+          "type": "object",
+          "description": "Optional filters to narrow search results",
+          "properties": {
+            "folders": {
+              "type": "array",
+              "description": "Only search within these vault folders",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tags": {
+              "type": "array",
+              "description": "Only return notes with ALL of these tags",
+              "items": {
+                "type": "string"
+              }
+            },
+            "date_modified_after": {
+              "type": "string",
+              "format": "date",
+              "description": "Only return notes modified after this date"
+            },
+            "date_modified_before": {
+              "type": "string",
+              "format": "date",
+              "description": "Only return notes modified before this date"
+            }
+          }
+        },
+        "include_content": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, return full note content instead of snippets. Use for retrieve/comparison tasks."
+        },
+        "context_window": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Number of adjacent chunks to include for context (parent-child chunking)"
+        }
+      }
+    },
+    "output_schema": {
+      "type": "object",
+      "required": ["status", "task_id"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "partial", "empty", "error"],
+          "description": "success: all results returned. partial: some results but search was incomplete. empty: no results found. error: search failed."
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "results": {
+          "type": "array",
+          "description": "Retrieved notes or search results",
+          "items": {
+            "type": "object",
+            "required": ["note_path", "title"],
+            "properties": {
+              "note_path": {
+                "type": "string",
+                "description": "Relative path within the Obsidian vault"
+              },
+              "title": {
+                "type": "string",
+                "description": "Note title (usually the filename without extension)"
+              },
+              "snippet": {
+                "type": "string",
+                "description": "Relevant excerpt from the note. Present when include_content is false."
+              },
+              "content": {
+                "type": "string",
+                "description": "Full note content. Present only when include_content is true."
+              },
+              "score": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Relevance score. For hybrid search, this is the RRF fusion score."
+              },
+              "metadata": {
+                "type": "object",
+                "properties": {
+                  "word_count": {
+                    "type": "integer"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "date_created": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "date_modified": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "folder": {
+                    "type": "string"
+                  }
+                }
+              },
+              "linked_notes": {
+                "type": "array",
+                "description": "Outgoing wiki-links from this note",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "backlinks": {
+                "type": "array",
+                "description": "Notes that link TO this note",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "query_interpretation": {
+          "type": "string",
+          "description": "How the Librarian understood and potentially rewrote the query. Useful for debugging search quality."
+        },
+        "vault_stats": {
+          "type": "object",
+          "description": "Present only when task_type is 'vault_overview'",
+          "properties": {
+            "total_notes": {
+              "type": "integer"
+            },
+            "total_folders": {
+              "type": "integer"
+            },
+            "total_tags": {
+              "type": "integer"
+            },
+            "index_last_updated": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        },
+        "blackboard_keys": {
+          "type": "array",
+          "description": "Keys on the Blackboard where results were written",
+          "items": {
+            "type": "string"
+          }
+        },
+        "execution_time_ms": {
+          "type": "number",
+          "description": "Time spent on this search/retrieval operation"
+        },
+        "error": {
+          "type": "object",
+          "description": "Present only if status is 'error'",
+          "properties": {
+            "error_type": {
+              "type": "string",
+              "enum": ["vault_not_found", "index_not_built", "memex_error", "invalid_query"]
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "peer_agents": {
+      "type": "array",
+      "description": "Librarian does not communicate with other agents directly. All communication goes through the Orchestrator and Blackboard.",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "default": 30,
+      "description": "Maximum time for a search operation"
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "default": 2
+        },
+        "backoff_strategy": {
+          "type": "string",
+          "enum": ["linear"],
+          "default": "linear"
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "description": "External dependencies required by this agent",
+      "properties": {
+        "memex_package": {
+          "type": "string",
+          "description": "Memex must be installed and indexed on the target vault"
+        },
+        "vault_path": {
+          "type": "string",
+          "description": "Filesystem path to the Obsidian vault. Provided via Orchestrator preferences."
+        }
+      }
+    }
+  }
+}

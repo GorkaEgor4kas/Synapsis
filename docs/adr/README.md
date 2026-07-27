@@ -4,9 +4,11 @@ This directory contains all ADRs for Synapsis.
 
 | ADR | Title | Status |
 |-----|-------|--------|
-| [ADR-001](./adr-001-system-architecture.md) | System Architecture | Draft |
-| ADR-002 | Agent Communication Protocol | Planned |
-| ADR-003 | Sandbox Security Model | Planned |
+| [ADR-001] | Hierarchical Multi-Agent Architecture with Blackboard Pattern | Accepted |
+| [ADR-002] | Agent Communication Protocol | Accepted |
+| [ADR-003] | Agent vs Infrastructure Separation | Accepted |
+| [ADR-004] | Sandbox Security Model for Code Execution | Accepted |
+| [ADR-005] | Voice I/O as External Layer | Accepted |
 
 ## What is an ADR?
 

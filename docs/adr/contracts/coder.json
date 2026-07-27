@@ -1,0 +1,309 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synapsis.dev/contracts/coder-v1.json",
+  "title": "Coder Agent Contract",
+  "description": "Code generation and sandbox execution agent. Generates code based on specifications and context, executes it in an isolated subprocess sandbox, and participates in debate with Critic for code review.",
+  "type": "object",
+  "required": ["agent_id", "agent_type", "capabilities", "input_schema", "output_schema"],
+  "properties": {
+    "agent_id": {
+      "type": "string",
+      "const": "coder-v1"
+    },
+    "agent_type": {
+      "type": "string",
+      "const": "coder"
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "Tools the Coder can invoke",
+      "items": {
+        "type": "string",
+        "enum": [
+          "generate_code",
+          "execute_in_sandbox",
+          "install_package",
+          "read_sandbox_file",
+          "write_sandbox_file",
+          "list_sandbox_files",
+          "get_execution_history",
+          "revise_code",
+          "explain_code"
+        ]
+      }
+    },
+    "input_schema": {
+      "type": "object",
+      "required": ["task_type", "task_id"],
+      "properties": {
+        "task_type": {
+          "type": "string",
+          "enum": [
+            "generate",
+            "execute",
+            "generate_and_execute",
+            "debug",
+            "refactor",
+            "revise",
+            "explain"
+          ],
+          "description": "Type of coding task requested"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task identifier from Orchestrator"
+        },
+        "specification": {
+          "type": "string",
+          "description": "Natural language description of what code to write. Required for generate/generate_and_execute.",
+          "maxLength": 4000
+        },
+        "context_blackboard_keys": {
+          "type": "array",
+          "description": "Blackboard keys pointing to context the Coder should read before generating code. Typically Librarian search results.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "code_to_revise_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key pointing to previous code version that needs revision. Used with task_type 'revise'."
+        },
+        "review_feedback_blackboard_key": {
+          "type": "string",
+          "description": "Blackboard key pointing to Critic's review feedback. Used with task_type 'revise'."
+        },
+        "language": {
+          "type": "string",
+          "enum": ["python", "javascript", "bash", "sql"],
+          "default": "python",
+          "description": "Programming language for code generation"
+        },
+        "sandbox_id": {
+          "type": "string",
+          "description": "Isolated sandbox identifier. Created automatically if not provided.",
+          "pattern": "^sandbox-[a-z0-9]+$"
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "Packages to install before execution. Must be on the whitelist unless allow_dangerous_packages is true.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "allow_dangerous_packages": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, bypass the package whitelist. Requires explicit user opt-in via CLI flag."
+        },
+        "execution_timeout_seconds": {
+          "type": "integer",
+          "default": 120,
+          "minimum": 5,
+          "maximum": 300,
+          "description": "Maximum time for code execution in the sandbox"
+        },
+        "environment_variables": {
+          "type": "object",
+          "description": "Environment variables to pass to the sandbox subprocess",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "output_schema": {
+      "type": "object",
+      "required": ["status", "task_id"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["success", "execution_error", "generation_error", "timeout", "needs_review"],
+          "description": "success: code generated and executed. execution_error: code generated but failed at runtime. generation_error: could not generate code. timeout: execution exceeded time limit. needs_review: code generated, awaiting Critic review before execution."
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string",
+          "description": "The generated or revised source code"
+        },
+        "language": {
+          "type": "string"
+        },
+        "execution_result": {
+          "type": "object",
+          "description": "Present only if code was executed",
+          "properties": {
+            "stdout": {
+              "type": "string",
+              "description": "Standard output captured during execution"
+            },
+            "stderr": {
+              "type": "string",
+              "description": "Standard error captured during execution"
+            },
+            "exit_code": {
+              "type": "integer",
+              "description": "Process exit code. 0 indicates success."
+            },
+            "execution_time_ms": {
+              "type": "number"
+            },
+            "timed_out": {
+              "type": "boolean",
+              "description": "True if execution was killed due to timeout"
+            },
+            "artifacts": {
+              "type": "array",
+              "description": "Files created by the executed code",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "filename": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "Full path within the sandbox directory"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["text", "image", "csv", "json", "binary", "other"]
+                  },
+                  "size_bytes": {
+                    "type": "integer"
+                  },
+                  "preview": {
+                    "type": "string",
+                    "description": "First 500 characters of text files, or a description for binary files"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "explanation": {
+          "type": "string",
+          "description": "Natural language explanation of what the code does, design decisions made, and any assumptions"
+        },
+        "blackboard_keys": {
+          "type": "array",
+          "description": "Blackboard keys where code and results were written",
+          "items": {
+            "type": "string"
+          }
+        },
+        "revision_history": {
+          "type": "array",
+          "description": "Chain of revisions if this was a revise task. Each entry points to a previous code version.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "version": {
+                "type": "integer"
+              },
+              "blackboard_key": {
+                "type": "string"
+              },
+              "changes_summary": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "error": {
+          "type": "object",
+          "description": "Present only on error statuses",
+          "properties": {
+            "error_type": {
+              "type": "string",
+              "enum": [
+                "sandbox_creation_failed",
+                "package_install_failed",
+                "execution_timeout",
+                "execution_error",
+                "llm_generation_failed",
+                "invalid_specification"
+              ]
+            },
+            "message": {
+              "type": "string"
+            },
+            "traceback": {
+              "type": "string",
+              "description": "Python traceback if execution failed"
+            }
+          }
+        }
+      }
+    },
+    "peer_agents": {
+      "type": "array",
+      "description": "Coder can participate in debate with Critic. This is the only peer-to-peer communication in the system, and it is always spawned and supervised by the Orchestrator.",
+      "items": {
+        "type": "string"
+      },
+      "default": ["critic-v1"]
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "default": 120,
+      "description": "Maximum time for code generation + execution"
+    },
+    "retry_policy": {
+      "type": "object",
+      "properties": {
+        "max_retries": {
+          "type": "integer",
+          "default": 3,
+          "description": "Higher retry count because code generation often needs multiple attempts"
+        },
+        "backoff_strategy": {
+          "type": "string",
+          "enum": ["exponential"],
+          "default": "exponential"
+        }
+      }
+    },
+    "sandbox_config": {
+      "type": "object",
+      "description": "Sandbox configuration defaults",
+      "properties": {
+        "base_dir": {
+          "type": "string",
+          "default": "/tmp/synapsis-sandbox",
+          "description": "Base directory for all sandboxes"
+        },
+        "max_memory_mb": {
+          "type": "integer",
+          "default": 512,
+          "description": "Maximum memory for sandbox subprocess (Unix only)"
+        },
+        "whitelisted_packages": {
+          "type": "array",
+          "description": "Packages that can be installed without the dangerous flag",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "numpy",
+            "pandas",
+            "matplotlib",
+            "scikit-learn",
+            "scipy",
+            "requests",
+            "pillow",
+            "beautifulsoup4"
+          ]
+        },
+        "cleanup_on_session_end": {
+          "type": "boolean",
+          "default": true,
+          "description": "Delete sandbox directories when the session ends"
+        }
+      }
+    }
+  }
+}
