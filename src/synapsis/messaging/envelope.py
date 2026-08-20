@@ -51,6 +51,7 @@ class Sender(str, Enum):
     VOICE_LISTENER = "voice-listener"
     VOICE_SPEAKER = "voice-speaker"
     SYSTEM = "system"
+    TEST = "test-agent"
 
 
 class MessageEnvelope(BaseModel):
@@ -73,7 +74,7 @@ class MessageEnvelope(BaseModel):
         description="Component that sent this message",
     )
 
-    reciever: Sender = Field(
+    receiver: Sender = Field(
         description="Component that should receive this message",
     )
 
