@@ -1,0 +1,6 @@
+{
+    "python.analysis.extraPaths": [
+        "C:/projects/Memex"
+    ],
+    "python.analysis.useLibraryCodeForTypes": true
+}
